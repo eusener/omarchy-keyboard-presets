@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "eusener.keyboard-presets",
+  "name": "Keyboard presets",
+  "version": "1.0.0",
+  "author": "eusener",
+  "license": "MIT",
+  "description": "Keyboard layout presets for hardware with quirky keys: ThinkPad ABNT2, ABNT2 + US, US international, Portugal, and XKB option toggles.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Keyboard presets",
+    "description": "Pick a keyboard preset (ThinkPad ABNT2, US intl, ...) and toggle XKB options.",
+    "category": "Compositor",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}
