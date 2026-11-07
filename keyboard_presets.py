@@ -2,9 +2,13 @@
 """Apply keyboard layout presets for the eusener.keyboard-presets plugin.
 
   keyboard_presets.py status
-  keyboard_presets.py apply '{"layouts": ["br:thinkpad"], "options": ["kpdl:dot"]}'
+  keyboard_presets.py apply '{"layouts": ["br:thinkpad"], "options": ["kpdl:dot"]}' [--consent]
+  keyboard_presets.py reset [--consent]
   keyboard_presets.py console br-abnt2
-  keyboard_presets.py reset
+
+apply and reset refuse to touch any file until the user has agreed once in
+the panel (--consent records that). Every file is backed up before it is
+changed, under ~/.config/omarchy/keyboard-presets/backups/<timestamp>/.
 
 Layouts and variants go to ~/.config/omarchy/keyboard-layouts, the file
 Omarchy's own `omarchy setup keyboard` writes, and the live fcitx5 group is
@@ -17,13 +21,18 @@ import os
 import re
 import subprocess
 import sys
+import shutil
 import tempfile
+import time
 from pathlib import Path
 
 CONFIG = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
 LAYOUTS_FILE = CONFIG / "omarchy/keyboard-layouts"
 OPTIONS_FILE = CONFIG / "hypr/keyboard_options.lua"
 INPUT_LUA = CONFIG / "hypr/input.lua"
+STATE_DIR = CONFIG / "omarchy/keyboard-presets"
+CONSENT_FILE = STATE_DIR / "consent"
+BACKUP_DIR = STATE_DIR / "backups"
 REQUIRE_LINE = 'pcall(require, "hypr.keyboard_options")'
 FCITX = ["busctl", "--user", "call", "org.fcitx.Fcitx5", "/controller", "org.fcitx.Fcitx.Controller1"]
 NON_LATIN = set("af am ara bd bg by et ge gr il in iq ir kg kh kz la lk mk mm mn mv np rs ru sy th tj ua".split())
@@ -58,6 +67,29 @@ def restore(path, original):
     path.unlink(missing_ok=True)
   else:
     atomic_write(path, original)
+
+
+def require_consent(given):
+  if given:
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    CONSENT_FILE.write_text(time.strftime("%Y-%m-%dT%H:%M:%S") + "\n")
+  if not CONSENT_FILE.exists():
+    raise PermissionError("Confirme no painel antes de alterar a configuração")
+
+
+def backup(paths):
+  """Copy every existing file about to change into a timestamped folder."""
+  existing = [p for p in paths if p.exists()]
+  if not existing:
+    return None
+  target = BACKUP_DIR / time.strftime("%Y%m%d-%H%M%S")
+  target.mkdir(parents=True, exist_ok=True)
+  for path in existing:
+    shutil.copy2(path.resolve(), target / path.name)
+  # Keep the twenty most recent backups.
+  for old in sorted(BACKUP_DIR.iterdir())[:-20]:
+    shutil.rmtree(old, ignore_errors=True)
+  return target
 
 
 def xkb_catalog():
@@ -97,6 +129,7 @@ def status():
     "layouts": live_layouts(),
     "options": opts,
     "managed": OPTIONS_FILE.exists(),
+    "consented": CONSENT_FILE.exists(),
     "inputOverride": input_override(),
   }))
 
@@ -152,7 +185,8 @@ def reload_checked(previous_errors):
     raise RuntimeError(errors)
 
 
-def apply(payload):
+def apply(payload, consent=False):
+  require_consent(consent)
   data = json.loads(payload)
   layouts = data.get("layouts") or []
   options = data.get("options") or []
@@ -190,6 +224,7 @@ def apply(payload):
     raise RuntimeError("hypr/input.lua define kb_layout/kb_variant e tem prioridade; remova essas linhas")
 
   originals = {p: read(p) for p in (LAYOUTS_FILE, OPTIONS_FILE, INPUT_LUA)}
+  backup(list(originals))
   previous_errors = run(["hyprctl", "configerrors"])
   try:
     atomic_write(LAYOUTS_FILE, "XKBLAYOUT={}\nXKBVARIANT={}\n".format(
@@ -215,9 +250,11 @@ def apply(payload):
   status()
 
 
-def reset():
+def reset(consent=False):
   """Back to the layout picked at install time (/etc/vconsole.conf)."""
+  require_consent(consent)
   originals = {p: read(p) for p in (LAYOUTS_FILE, OPTIONS_FILE)}
+  backup(list(originals))
   previous_errors = run(["hyprctl", "configerrors"])
   try:
     LAYOUTS_FILE.unlink(missing_ok=True)
@@ -246,10 +283,10 @@ def main():
   try:
     if args == ["status"]:
       status()
-    elif len(args) == 2 and args[0] == "apply":
-      apply(args[1])
-    elif args == ["reset"]:
-      reset()
+    elif args[:1] == ["apply"] and len(args) in (2, 3) and args[2:] in ([], ["--consent"]):
+      apply(args[1], consent=len(args) == 3)
+    elif args[:1] == ["reset"] and args[1:] in ([], ["--consent"]):
+      reset(consent=len(args) == 2)
     elif len(args) == 2 and args[0] == "console":
       console(args[1])
     else:
@@ -257,7 +294,7 @@ def main():
   except subprocess.CalledProcessError as error:
     print((error.stderr or str(error)).strip(), file=sys.stderr)
     sys.exit(1)
-  except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as error:
+  except (OSError, ValueError, RuntimeError, PermissionError, json.JSONDecodeError) as error:
     print(str(error), file=sys.stderr)
     sys.exit(1)
 

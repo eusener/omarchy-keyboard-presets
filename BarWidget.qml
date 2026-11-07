@@ -34,6 +34,10 @@ Panel {
   property var layouts: []
   property var options: []
   property bool inputOverride: false
+  // Nothing under ~/.config changes until the user has agreed once.
+  property bool consented: false
+  property var pendingArgs: null
+  property string pendingSuccess: ""
   property bool busy: false
   property string message: ""
   property bool messageIsError: false
@@ -59,6 +63,28 @@ Panel {
     statusProc.running = true
   }
 
+  // apply/reset write user config: the first time, ask before touching it.
+  function runConfigChange(args, successText) {
+    if (busy) return
+    if (!consented) {
+      pendingArgs = args
+      pendingSuccess = successText
+      cursorActive = false
+      return
+    }
+    runHelper(args, successText)
+  }
+
+  function confirmPending() {
+    var args = pendingArgs
+    pendingArgs = null
+    if (args) runHelper(args.concat(["--consent"]), pendingSuccess)
+  }
+
+  function cancelPending() {
+    pendingArgs = null
+  }
+
   function runHelper(args, successText) {
     if (busy) return
     busy = true
@@ -75,6 +101,7 @@ Panel {
       if (data.layouts) root.layouts = data.layouts
       if (data.options) root.options = data.options
       if (data.inputOverride !== undefined) root.inputOverride = data.inputOverride
+      if (data.consented !== undefined) root.consented = data.consented
       return true
     } catch (e) {
       return false
@@ -82,18 +109,18 @@ Panel {
   }
 
   function applyPreset(preset) {
-    runHelper(["apply", JSON.stringify({ layouts: preset.layouts, options: Presets.presetOptions(root.options) })],
+    runConfigChange(["apply", JSON.stringify({ layouts: preset.layouts, options: Presets.presetOptions(root.options) })],
               strings.t("applied").arg(strings.t("preset." + preset.id)))
   }
 
   function toggleOption(option) {
     var layouts = root.layouts.length ? root.layouts : ["us"]
-    runHelper(["apply", JSON.stringify({ layouts: layouts, options: Presets.toggledOptions(root.options, option.id) })],
+    runConfigChange(["apply", JSON.stringify({ layouts: layouts, options: Presets.toggledOptions(root.options, option.id) })],
               strings.t("applied").arg(strings.t("option." + option.key)))
   }
 
   function resetDefault() {
-    runHelper(["reset"], strings.t("applied").arg(strings.t("reset")))
+    runConfigChange(["reset"], strings.t("applied").arg(strings.t("reset")))
   }
 
   function applyConsole() {
@@ -120,6 +147,7 @@ Panel {
   }
 
   onOpenedChanged: if (opened) {
+    pendingArgs = null
     cursorActive = false
     cursorIndex = Math.max(0, Presets.PRESETS.findIndex(function (p) { return p.id === root.activePreset }))
     if (panelFlick) panelFlick.contentY = 0
@@ -206,9 +234,19 @@ Panel {
       property alias panelFlick: panelFlick
       implicitHeight: column.implicitHeight
       anchors.fill: parent
-      onMoveRequested: function(dx, dy) { if (dy !== 0) root.moveCursor(dy) }
-      onActivateRequested: if (root.cursorActive) root.activateRow(root.cursorIndex)
-      onCloseRequested: root.close()
+      onMoveRequested: function(dx, dy) {
+        if (consentDialog.opened) { if (dx !== 0) consentDialog.selectedIndex = consentDialog.selectedIndex === 0 ? 1 : 0; return }
+        if (dy !== 0) root.moveCursor(dy)
+      }
+      onActivateRequested: {
+        if (consentDialog.opened) {
+          if (consentDialog.selectedIndex === 0) root.cancelPending()
+          else root.confirmPending()
+          return
+        }
+        if (root.cursorActive) root.activateRow(root.cursorIndex)
+      }
+      onCloseRequested: consentDialog.opened ? root.cancelPending() : root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
       onTextKey: function(t) { if (t === "r" || t === "R") root.refresh() }
 
@@ -344,6 +382,19 @@ Panel {
             wrapMode: Text.WordWrap
           }
         }
+      }
+
+      ConfirmDialog {
+        id: consentDialog
+        anchors.fill: parent
+        z: 10
+        opened: root.pendingArgs !== null
+        message: strings.t("consent")
+        confirmText: strings.t("consentConfirm")
+        foreground: root.foreground
+        fontFamily: root.fontFamily
+        onCanceled: root.cancelPending()
+        onConfirmed: root.confirmPending()
       }
     }
   }

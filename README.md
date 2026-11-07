@@ -40,6 +40,12 @@ IPC: `omarchy-shell eusener.keyboard-presets toggle` / `status`.
 
 ## What it changes
 
+**Nothing is written until you agree.** The first time you apply a preset,
+toggle an option or reset, the panel lists the files below and asks for
+confirmation; the helper itself refuses to write without it. Before every
+change, each existing file is copied to
+`~/.config/omarchy/keyboard-presets/backups/<timestamp>/` (last 20 kept).
+
 All writes are made by `keyboard_presets.py`, run as your user:
 
 - `~/.config/omarchy/keyboard-layouts` – layouts and variants. This is the same
@@ -78,7 +84,8 @@ Your keyboard keeps the last preset you applied. To return to the install
 default first, click **Back to install default** (removes
 `keyboard-layouts` and `keyboard_options.lua`). The `pcall(require, ...)` line
 left in `hypr/input.lua` is harmless when the file is gone; delete it if you
-like.
+like. Backups and the consent marker live in `~/.config/omarchy/keyboard-presets/`;
+copy a backup back to restore, or delete the folder.
 
 ## License
 

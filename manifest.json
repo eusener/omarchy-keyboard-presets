@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "eusener.keyboard-presets",
   "name": "Keyboard presets",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "eusener",
   "license": "MIT",
   "description": "Keyboard layout presets for hardware with quirky keys: ThinkPad ABNT2, ABNT2 + US, US international, Portugal, and XKB option toggles.",

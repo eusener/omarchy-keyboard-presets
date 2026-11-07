@@ -35,5 +35,7 @@
   "option.capsEsc": "Caps Lock é Esc",
   "option.capsCtrl": "Caps Lock é Ctrl",
   "option.swapCaps": "Trocar Ctrl e Caps Lock",
-  "option.swapAltWin": "Trocar Alt e Super (teclados Mac)"
+  "option.swapAltWin": "Trocar Alt e Super (teclados Mac)",
+  "consent": "Aplicar uma predefinição altera sua configuração:\n• ~/.config/omarchy/keyboard-layouts\n• ~/.config/hypr/keyboard_options.lua\n• uma linha adicionada em ~/.config/hypr/input.lua\n\nAntes, uma cópia de cada arquivo é salva em ~/.config/omarchy/keyboard-presets/backups.",
+  "consentConfirm": "Aplicar"
 }
